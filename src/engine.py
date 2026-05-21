@@ -53,7 +53,7 @@ def calculate_dead_stock_amount(project_master_df: pd.DataFrame, inventory_bom_d
 def render_dead_stock_simulator(
     project_master_df: pd.DataFrame,
     inventory_bom_df: pd.DataFrame,
-) -> tuple[str, int, int, str]:
+) -> tuple[str, int, int, int, str]:
     """Render project selector/slider and return calculated dead-stock amount."""
     project_ids = (
         project_master_df["Project_ID"]
@@ -72,9 +72,13 @@ def render_dead_stock_simulator(
     selected_project_id = st.selectbox("Project 선택", project_ids)
     delay_months = st.slider("지연 기간(개월)", min_value=1, max_value=12, value=1)
 
-    dead_stock_amount = calculate_dead_stock_amount(project_master_df, inventory_bom_df, selected_project_id)
-    dead_stock_display = f"₩{dead_stock_amount:,.0f}"
+    base_dead_stock_amount = calculate_dead_stock_amount(project_master_df, inventory_bom_df, selected_project_id)
+    delayed_dead_stock_amount = int(round(base_dead_stock_amount * delay_months, 0))
+    dead_stock_display = f"₩{delayed_dead_stock_amount:,.0f}"
 
     st.metric("Dead Stock (자본 동결 금액)", dead_stock_display)
-    st.caption(f"선택 프로젝트: {selected_project_id} / 지연 기간: {delay_months}개월")
-    return selected_project_id, delay_months, dead_stock_amount, dead_stock_display
+    st.caption(
+        f"선택 프로젝트: {selected_project_id} / 지연 기간: {delay_months}개월 "
+        f"(기준 BOM 합계: ₩{base_dead_stock_amount:,.0f})"
+    )
+    return selected_project_id, delay_months, base_dead_stock_amount, delayed_dead_stock_amount, dead_stock_display
