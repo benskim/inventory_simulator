@@ -100,11 +100,12 @@ def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_d
         st.error("Project_Master에 유효한 Project_ID가 없습니다.")
         st.stop()
 
+    selected_project_id = st.selectbox("Project 선택", project_ids)
+
     c1, c2, c3 = st.columns(3)
-    selected_project_id = c1.selectbox("Project 선택", project_ids)
-    delay_months = c2.slider("지연 기간(개월)", min_value=0, max_value=12, value=0)
-    holding_cost_rate = c3.number_input("연간 금융비용율(%)", min_value=0.0, max_value=100.0, value=DEFAULT_HOLDING_COST_RATE, step=0.1)
-    plt_monthly_cost = st.number_input("PLT당 월 보관료(원)", min_value=0, value=DEFAULT_PLT_MONTHLY_COST, step=1000)
+    delay_months = c1.slider("지연 기간(개월)", min_value=0, max_value=12, value=0)
+    holding_cost_rate = c2.number_input("연간 금융비용율(%)", min_value=0.0, max_value=100.0, value=DEFAULT_HOLDING_COST_RATE, step=0.1)
+    plt_monthly_cost = c3.number_input("PLT당 월 보관료(원)", min_value=0, value=DEFAULT_PLT_MONTHLY_COST, step=1000)
 
     selected_bom = _merge_project_bom(project_master_df, inventory_bom_df, selected_project_id)
     selected_bom["Category"] = _resolve_category_series(selected_bom)
@@ -126,10 +127,13 @@ def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_d
     )
 
     m1, m2 = st.columns(2)
-    m1.metric("Dead Stock (재고 원가)", f"₩{base_dead_stock:,.0f}")
-    m2.metric("총 리스크 비용", f"₩{total_risk_cost:,.0f}")
-    st.caption(f"보관비용 = M_rent × Q × m  (현재: ₩{yard_cost:,.0f})")
-    st.caption(f"자본기회비용 = C × ((A_wacc/100) ÷ 12) × m  (현재: ₩{capital_cost:,.0f})")
-    st.caption(f"진부화손실비용 = C × ((A_obs/100) ÷ 12) × m  (현재: ₩{obsolescence_cost:,.0f})")
-    st.caption("총손실 = 보관비용 + 자본기회비용 + 진부화손실비용")
+    with m1:
+        st.metric("Dead Stock (재고 원가)", f"₩{base_dead_stock:,.0f}")
+        st.caption("Dead Stock = Σ(Unit_Cost × Required_Qty) (지연 개월수와 무관)")
+    with m2:
+        st.metric("총 리스크 비용", f"₩{total_risk_cost:,.0f}")
+        st.caption(f"보관비용 = M_rent × Q × m  (현재: ₩{yard_cost:,.0f})")
+        st.caption(f"자본기회비용 = C × ((A_wacc/100) ÷ 12) × m  (현재: ₩{capital_cost:,.0f})")
+        st.caption(f"진부화손실비용 = C × ((A_obs/100) ÷ 12) × m  (현재: ₩{obsolescence_cost:,.0f})")
+        st.caption("총손실 = 보관비용 + 자본기회비용 + 진부화손실비용")
     return selected_project_id, delay_months, total_risk_cost, f"₩{total_risk_cost:,.0f}"
