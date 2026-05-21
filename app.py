@@ -27,7 +27,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src.data_loader import load_demo_data, load_excel, sanitize_dataframe, validate_columns
+from src.data_loader import (
+    load_demo_data,
+    render_upload_and_validation_interface,
+    sanitize_dataframe,
+    validate_columns,
+)
 from src.engine import calculate_risk_metrics, summarize_kpi
 from src.ui import render_kpis, render_red_alerts, render_table
 
@@ -37,14 +42,15 @@ def main() -> None:
     st.title("초경량 결정론적 재고 리스크 시뮬레이터")
 
     use_demo_data = st.toggle("프리셋 데모 데이터 사용", value=True)
-    uploaded_file = st.file_uploader("Excel 파일 업로드 (.xlsx)", type=["xlsx"])
-
     if use_demo_data:
         source_df = load_demo_data()
-    elif uploaded_file is not None:
-        source_df = load_excel(uploaded_file)
     else:
-        st.info("데모 데이터를 사용하거나 Excel 파일을 업로드하세요.")
+        st.markdown("### 입력 데이터 업로드 및 스키마 검증")
+        project_df, bom_df = render_upload_and_validation_interface()
+        if project_df is None or bom_df is None:
+            st.stop()
+
+        st.info("스키마 검증이 완료되었습니다. 현재 화면은 검증 레이어 MVP이며, 계산 엔진 연동은 다음 단계입니다.")
         st.stop()
 
     is_valid, missing_columns = validate_columns(source_df)
