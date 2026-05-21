@@ -5,7 +5,7 @@ PROJECT_SCHEMA = {
     "Project_ID": "string",
     "Client": "string",
     "Product_Name": "string",
-    "Order Value": "integer",
+    "Order_Value": "float",
     "Delivery_Date": "datetime",
 }
 
@@ -13,8 +13,8 @@ BOM_SCHEMA = {
     "Item_Code": "string",
     "Item_Name": "string",
     "Associated_Project": "string",
-    "Unit_Cost": "integer",
-    "Required_Qty": "integer",
+    "Unit_Cost": "float",
+    "Required_Qty": "float",
 }
 
 
@@ -30,8 +30,8 @@ def _validate_dtypes(df: pd.DataFrame, schema: dict[str, str]) -> tuple[bool, li
         if expected == "string":
             if not pd.api.types.is_string_dtype(df[column]):
                 invalid_columns.append(column)
-        elif expected == "integer":
-            if not pd.api.types.is_integer_dtype(df[column]):
+        elif expected == "float":
+            if not pd.api.types.is_float_dtype(df[column]) and not pd.api.types.is_integer_dtype(df[column]):
                 invalid_columns.append(column)
         elif expected == "datetime":
             if not pd.api.types.is_datetime64_any_dtype(df[column]):
