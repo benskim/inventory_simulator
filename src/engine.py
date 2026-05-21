@@ -10,10 +10,10 @@ DEFAULT_PLT_MONTHLY_COST = 30000
 DEFAULT_HOLDING_COST_RATE = 6.5
 
 CATEGORY_MASTER_DEFAULTS: dict[str, dict[str, float | int]] = {
-    "원자재": {"annual_obs_rate": 0.08, "qty_per_pallet": 200},
-    "전장부품": {"annual_obs_rate": 0.15, "qty_per_pallet": 500},
-    "기능성모듈": {"annual_obs_rate": 0.12, "qty_per_pallet": 2},
-    "기타": {"annual_obs_rate": 0.05, "qty_per_pallet": 100},
+    "원자재": {"annual_obs_rate": 8.0, "qty_per_pallet": 200},
+    "전장부품": {"annual_obs_rate": 15.0, "qty_per_pallet": 500},
+    "기능성모듈": {"annual_obs_rate": 12.0, "qty_per_pallet": 2},
+    "기타": {"annual_obs_rate": 5.0, "qty_per_pallet": 100},
 }
 
 
@@ -73,7 +73,7 @@ def calculate_total_risk_cost(
     delay_months: int,
     plt_monthly_cost: int,
     holding_cost_rate: float,
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int, int, int]:
     """Calculate total risk cost with category-aware factors and monthly prorating."""
     project_keys = project_master_df[["Project_ID"]].copy()
     project_keys["Project_ID"] = project_keys["Project_ID"].astype("string").str.strip()
@@ -84,7 +84,7 @@ def calculate_total_risk_cost(
     selected = bom[bom["Project_ID"] == project_id].copy()
 
     if selected.empty:
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0, 0
 
     selected["재고원가"] = selected["Unit_Cost"] * selected["Required_Qty"]
     selected["카테고리"] = _resolve_category_series(selected)
@@ -106,11 +106,19 @@ def calculate_total_risk_cost(
     capital_cost = (
         selected["재고원가"] * ((holding_cost_rate / 100) / 12) * delay_months
     ).sum()
-    obsolescence_cost = (selected["재고원가"] * (selected["연간진부화비율"] / 12) * delay_months).sum()
+    obsolescence_cost = (
+        selected["재고원가"] * ((selected["연간진부화비율"] / 100) / 12) * delay_months
+    ).sum()
 
     total_risk_cost = round(yard_cost + capital_cost + obsolescence_cost, 0)
     baseline_dead_stock = round(selected["재고원가"].sum(), 0)
-    return int(baseline_dead_stock), int(round(yard_cost, 0)), int(round(capital_cost, 0)), int(total_risk_cost)
+    return (
+        int(baseline_dead_stock),
+        int(round(yard_cost, 0)),
+        int(round(capital_cost, 0)),
+        int(round(obsolescence_cost, 0)),
+        int(total_risk_cost),
+    )
 
 
 def render_dead_stock_simulator(
@@ -118,7 +126,10 @@ def render_dead_stock_simulator(
     inventory_bom_df: pd.DataFrame,
 ) -> tuple[str, int, int, str]:
     """Render project selector/slider and category-linked cost simulation."""
-    st.markdown("#### 연산 로직: 총리스크비용 = 야드보관비용 + 자본기회비용(연이율/12×지연개월) + 진부화손실(연간진부화율/12×지연개월)")
+    st.markdown("#### Dead Stock(재고 원가) 및 총 리스크 비용 시뮬레이션")
+    st.caption("Dead Stock은 지연 개월수와 무관하게 Σ(Unit_Cost × Required_Qty)로 계산됩니다.")
+    st.caption("카테고리 기준값: 원자재(연8%/200ea), 전장부품(연15%/500ea), 기능성모듈(연12%/2ea), 기타(연5%/100ea).")
+    st.caption("Inventory_BOM의 Category가 비어있거나 미존재 시 기타 기준으로 계산됩니다.")
 
     project_ids = (
         project_master_df["Project_ID"]
@@ -139,7 +150,7 @@ def render_dead_stock_simulator(
     holding_cost_rate = control_col3.number_input("연간 금융비용율(%)", min_value=0.0, max_value=100.0, value=DEFAULT_HOLDING_COST_RATE, step=0.1)
     plt_monthly_cost = st.number_input("PLT당 월 보관료(원)", min_value=0, value=DEFAULT_PLT_MONTHLY_COST, step=1000)
 
-    base_dead_stock, yard_cost, capital_cost, total_risk_cost = calculate_total_risk_cost(
+    base_dead_stock, yard_cost, capital_cost, obsolescence_cost, total_risk_cost = calculate_total_risk_cost(
         project_master_df,
         inventory_bom_df,
         selected_project_id,
@@ -148,9 +159,13 @@ def render_dead_stock_simulator(
         float(holding_cost_rate),
     )
 
-    st.metric("총 리스크 비용 (자본 동결 + 보관 + 진부화)", f"₩{total_risk_cost:,.0f}")
-    st.caption(
-        f"기준 재고원가(Σ단가×수량): ₩{base_dead_stock:,.0f} | "
-        f"야드보관비용: ₩{yard_cost:,.0f} | 자본기회비용: ₩{capital_cost:,.0f}"
-    )
+    metric_col1, metric_col2 = st.columns(2)
+    metric_col1.metric("Dead Stock (재고 원가)", f"₩{base_dead_stock:,.0f}")
+    metric_col2.metric("총 리스크 비용", f"₩{total_risk_cost:,.0f}")
+
+    st.caption(f"보관비용 = M_rent × Q × m  (현재: ₩{yard_cost:,.0f})")
+    st.caption(f"자본기회비용 = C × ((A_wacc/100) ÷ 12) × m  (현재: ₩{capital_cost:,.0f})")
+    st.caption(f"진부화손실비용 = C × ((A_obs/100) ÷ 12) × m  (현재: ₩{obsolescence_cost:,.0f})")
+    st.caption("총손실 = 보관비용 + 자본기회비용 + 진부화손실비용")
+
     return selected_project_id, delay_months, total_risk_cost, f"₩{total_risk_cost:,.0f}"
