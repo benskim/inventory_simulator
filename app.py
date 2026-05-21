@@ -33,7 +33,7 @@ from src.data_loader import (
     sanitize_dataframe,
     validate_columns,
 )
-from src.engine import calculate_risk_metrics, summarize_kpi
+from src.engine import calculate_risk_metrics, render_dead_stock_simulator, summarize_kpi
 from src.ui import render_kpis, render_red_alerts, render_table
 
 
@@ -50,7 +50,8 @@ def main() -> None:
         if project_df is None or bom_df is None:
             st.stop()
 
-        st.info("스키마 검증이 완료되었습니다. 현재 화면은 검증 레이어 MVP이며, 계산 엔진 연동은 다음 단계입니다.")
+        st.markdown("### Dead Stock 시뮬레이션")
+        render_dead_stock_simulator(project_df, bom_df)
         st.stop()
 
     is_valid, missing_columns = validate_columns(source_df)

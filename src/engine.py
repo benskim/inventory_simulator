@@ -32,8 +32,14 @@ def calculate_dead_stock_amount(project_master_df: pd.DataFrame, inventory_bom_d
 
     Formula: Dead_Stock = Σ(Unit_Cost × Required_Qty)
     """
-    merged = inventory_bom_df.merge(
-        project_master_df[["Project_ID"]],
+    project_keys = project_master_df[["Project_ID"]].copy()
+    project_keys["Project_ID"] = project_keys["Project_ID"].astype("string").str.strip()
+
+    bom = inventory_bom_df.copy()
+    bom["Associated_Project"] = bom["Associated_Project"].astype("string").str.strip()
+
+    merged = bom.merge(
+        project_keys,
         left_on="Associated_Project",
         right_on="Project_ID",
         how="inner",
@@ -44,9 +50,25 @@ def calculate_dead_stock_amount(project_master_df: pd.DataFrame, inventory_bom_d
     return int(dead_stock_amount)
 
 
-def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame) -> tuple[str, int, int, str]:
+def render_dead_stock_simulator(
+    project_master_df: pd.DataFrame,
+    inventory_bom_df: pd.DataFrame,
+) -> tuple[str, int, int, str]:
     """Render project selector/slider and return calculated dead-stock amount."""
-    project_ids = project_master_df["Project_ID"].dropna().astype("string").drop_duplicates().tolist()
+    project_ids = (
+        project_master_df["Project_ID"]
+        .astype("string")
+        .str.strip()
+        .dropna()
+        .drop_duplicates()
+        .sort_values()
+        .tolist()
+    )
+
+    if len(project_ids) == 0:
+        st.error("Project_Master에 유효한 Project_ID가 없습니다.")
+        st.stop()
+
     selected_project_id = st.selectbox("Project 선택", project_ids)
     delay_months = st.slider("지연 기간(개월)", min_value=1, max_value=12, value=1)
 
