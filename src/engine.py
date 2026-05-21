@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import streamlit as st
 
 
 def calculate_risk_metrics(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -24,3 +25,34 @@ def summarize_kpi(dataframe: pd.DataFrame) -> dict[str, int | float]:
         "red_alert_count": int(dataframe["red_alert"].sum()),
         "average_risk_ratio_pct": float(dataframe["risk_ratio_pct"].mean().round(2)),
     }
+
+
+def calculate_dead_stock_amount(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame, project_id: str) -> int:
+    """Calculate dead-stock amount for one project with vectorized arithmetic.
+
+    Formula: Dead_Stock = Σ(Unit_Cost × Required_Qty)
+    """
+    merged = inventory_bom_df.merge(
+        project_master_df[["Project_ID"]],
+        left_on="Associated_Project",
+        right_on="Project_ID",
+        how="inner",
+    )
+
+    selected_rows = merged[merged["Project_ID"] == project_id]
+    dead_stock_amount = round((selected_rows["Unit_Cost"] * selected_rows["Required_Qty"]).sum(), 0)
+    return int(dead_stock_amount)
+
+
+def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame) -> tuple[str, int, int, str]:
+    """Render project selector/slider and return calculated dead-stock amount."""
+    project_ids = project_master_df["Project_ID"].dropna().astype("string").drop_duplicates().tolist()
+    selected_project_id = st.selectbox("Project 선택", project_ids)
+    delay_months = st.slider("지연 기간(개월)", min_value=1, max_value=12, value=1)
+
+    dead_stock_amount = calculate_dead_stock_amount(project_master_df, inventory_bom_df, selected_project_id)
+    dead_stock_display = f"₩{dead_stock_amount:,.0f}"
+
+    st.metric("Dead Stock (자본 동결 금액)", dead_stock_display)
+    st.caption(f"선택 프로젝트: {selected_project_id} / 지연 기간: {delay_months}개월")
+    return selected_project_id, delay_months, dead_stock_amount, dead_stock_display
