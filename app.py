@@ -77,7 +77,13 @@ def main() -> None:
         delay_days = 0
 
     if df_schedule is not None and df_inventory is not None:
-        frozen_capital = _calculate_frozen_cash(df_inventory)
+        if scenario == "NONE":
+            st.markdown("### Dead Stock 시뮬레이션")
+            _, _, total_risk_cost, _ = ui.render_dead_stock_simulator(df_schedule, df_inventory)
+            frozen_capital = total_risk_cost
+        else:
+            frozen_capital = _calculate_frozen_cash(df_inventory)
+
         penalty_result = engine.calculate_delay_penalty(
             order_value=int(df_schedule["Order_Value"].iloc[0]),
             delay_days=delay_days,
@@ -87,6 +93,7 @@ def main() -> None:
         ui.render_kpi_cards(frozen_capital, penalty_result["penalty_amount"])
         ui.render_risk_summary()
         ui.render_action_plan(frozen_capital, penalty_result["penalty_amount"], scenario)
+        st.caption(f"납기지연손실 산식: {penalty_result['formula_text']}")
     else:
         st.info("📂 파일을 업로드하거나 데모 버튼을 클릭하세요.")
         ui.render_status_banner(st.session_state.simulation_run, scenario)
