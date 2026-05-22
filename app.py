@@ -34,7 +34,7 @@ from src.data_loader import (
     validate_columns,
 )
 from src.engine import calculate_risk_metrics, render_dead_stock_simulator, summarize_kpi
-from src.ui import render_kpis, render_red_alerts, render_table
+from src.ui import render_executive_dashboard
 
 
 def main() -> None:
@@ -63,10 +63,11 @@ def main() -> None:
     result_df = calculate_risk_metrics(sanitized_df)
     kpi = summarize_kpi(result_df)
 
-    render_kpis(kpi)
-    render_red_alerts(result_df)
-    st.markdown("### 프로젝트 리스크 상세")
-    render_table(result_df)
+    render_executive_dashboard(
+        df=result_df,
+        frozen_capital=int(kpi["total_revenue_krw"]),
+        delay_penalty=int(kpi["total_risk_cost_krw"]),
+    )
 
 
 if __name__ == "__main__":
