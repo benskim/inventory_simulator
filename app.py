@@ -3,94 +3,93 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from data.preset import DEMO_BOM, DEMO_DELAY_DAYS, DEMO_PROJECT
-from src import data_loader
-from src import engine
-from src import ui
+from data.preset import (
+    DEMO_BOM_S1,
+    DEMO_BOM_S2,
+    DEMO_DELAY_DAYS_S1,
+    DEMO_DELAY_DAYS_S2,
+    DEMO_PROJECT_S1,
+    DEMO_PROJECT_S2,
+)
+from src import data_loader, engine, ui
 
 
 for key, default in [
     ("simulation_run", False),
     ("demo_mode", False),
-    ("demo_data", None),
+    ("demo_scenario", "NONE"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
+
+
+def _calculate_frozen_cash(df_inventory: pd.DataFrame) -> int:
+    baseline, *_ = engine.calculate_total_risk_cost(
+        selected=df_inventory,
+        delay_months=0,
+        plt_monthly_cost=engine.DEFAULT_PLT_MONTHLY_COST,
+        holding_cost_rate=engine.DEFAULT_HOLDING_COST_RATE,
+    )
+    return int(baseline)
 
 
 def main() -> None:
     st.set_page_config(page_title="Inventory Risk Simulator", layout="wide")
     st.title("초경량 결정론적 재고 리스크 시뮬레이터")
 
-    if st.button("⚡ LGES 오하이오향 3개월 지연 데모 실행", use_container_width=True):
-        try:
-            df_schedule = pd.DataFrame([DEMO_PROJECT])
-            df_schedule["Delivery_Date"] = pd.to_datetime(df_schedule["Delivery_Date"])
-            df_inventory = pd.DataFrame([DEMO_BOM])
-
-            st.session_state.demo_data = {
-                "schedule": df_schedule,
-                "inventory": df_inventory,
-            }
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        if st.button("⚡ [S1] LGES 오하이오 3개월 지연 데모", use_container_width=True):
             st.session_state.demo_mode = True
+            st.session_state.demo_scenario = "S1"
             st.session_state.simulation_run = True
-        except Exception as e:  # noqa: BLE001
-            st.error(f"데모 데이터 생성 실패: {e}")
-            st.stop()
+    with col_s2:
+        if st.button("⚡ [S2] 전장부품 쇼티지 21일 지연 데모", use_container_width=True):
+            st.session_state.demo_mode = True
+            st.session_state.demo_scenario = "S2"
+            st.session_state.simulation_run = True
 
     st.markdown("### 입력 데이터 업로드 및 스키마 검증")
-    project_df, bom_df = data_loader.render_upload_and_validation_interface()
+    schedule_file, inventory_file = data_loader.render_upload_and_validation_interface()
 
-    if project_df is not None or bom_df is not None:
+    if schedule_file is not None or inventory_file is not None:
         st.session_state.demo_mode = False
-        st.session_state.demo_data = None
+        st.session_state.demo_scenario = "NONE"
 
-    slider_days = st.slider("납기 지연 일수", min_value=0, max_value=365, value=DEMO_DELAY_DAYS)
+    slider_value = st.slider("납기 지연 일수", min_value=0, max_value=365, value=21)
+    scenario = st.session_state.demo_scenario
 
-    frozen_capital = 0
-    penalty_amount = 0
+    if scenario == "S1":
+        df_schedule = pd.DataFrame([DEMO_PROJECT_S1])
+        df_inventory = pd.DataFrame([DEMO_BOM_S1])
+        delay_days = DEMO_DELAY_DAYS_S1
+    elif scenario == "S2":
+        df_schedule = pd.DataFrame([DEMO_PROJECT_S2])
+        df_inventory = pd.DataFrame([DEMO_BOM_S2])
+        delay_days = DEMO_DELAY_DAYS_S2
+    elif schedule_file is not None and inventory_file is not None:
+        df_schedule = schedule_file
+        df_inventory = inventory_file
+        delay_days = slider_value
+    else:
+        df_schedule = None
+        df_inventory = None
+        delay_days = 0
 
-    if st.session_state.demo_mode and st.session_state.demo_data:
-        df_schedule = st.session_state.demo_data["schedule"]
-        _ = st.session_state.demo_data["inventory"]
+    if df_schedule is not None and df_inventory is not None:
+        frozen_capital = _calculate_frozen_cash(df_inventory)
         penalty_result = engine.calculate_delay_penalty(
             order_value=int(df_schedule["Order_Value"].iloc[0]),
-            delay_days=DEMO_DELAY_DAYS,
-        )
-        penalty_amount = penalty_result["penalty_amount"]
-        st.session_state.simulation_run = True
-
-        ui.render_status_banner()
-        ui.render_kpi_cards(frozen_capital, penalty_amount)
-        ui.render_action_plan(frozen_capital, penalty_amount)
-        st.caption(f"납기지연손실금액 산식: {penalty_result['formula_text']}")
-
-    elif project_df is not None and bom_df is not None:
-        st.markdown("### Dead Stock 시뮬레이션")
-        _, delay_months, total_risk_cost, _ = ui.render_dead_stock_simulator(project_df, bom_df)
-
-        # 총 손실 공식은 기존 월 단위를 그대로 유지 (일 슬라이더와 분리)
-        _ = delay_months
-        frozen_capital = total_risk_cost
-
-        df_schedule = project_df
-        first_order_value = int(df_schedule["Order_Value"].iloc[0]) if len(df_schedule) > 0 else 0
-        penalty_result = engine.calculate_delay_penalty(
-            order_value=first_order_value,
-            delay_days=slider_days,
+            delay_days=delay_days,
         )
 
-        penalty_amount = 0
-        st.session_state.simulation_run = True
-
-        ui.render_status_banner()
-        ui.render_kpi_cards(frozen_capital, penalty_amount)
-        ui.render_action_plan(frozen_capital, penalty_amount)
-        st.caption("동결자금 산식(월기준): 보관비용 + 자본기회비용 + 진부화손실비용")
-        st.caption(f"(참고) 납기지연손실금액 일단위 산식: {penalty_result['formula_text']}")
-
+        ui.render_status_banner(st.session_state.simulation_run, scenario)
+        ui.render_kpi_cards(frozen_capital, penalty_result["penalty_amount"])
+        ui.render_risk_summary()
+        ui.render_action_plan(frozen_capital, penalty_result["penalty_amount"], scenario)
     else:
-        st.info("📂 엑셀 파일을 업로드하거나 데모 버튼을 클릭하세요.")
+        st.info("📂 파일을 업로드하거나 데모 버튼을 클릭하세요.")
+        ui.render_status_banner(st.session_state.simulation_run, scenario)
         ui.render_kpi_cards(0, 0)
 
 

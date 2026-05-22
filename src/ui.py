@@ -27,20 +27,27 @@ def _format_krw(amount: int) -> str:
     return f"₩{amount:,.0f}"
 
 
-def render_status_banner() -> None:
-    if _is_simulation_run():
-        st.error("🚨 창고 포화 및 자본 동결 위험 감지! 프로젝트 지연 리스크가 반영되었습니다.")
-    else:
+def render_status_banner(simulation_run: bool, scenario: str) -> None:
+    if not simulation_run:
         st.success("🟢 시스템 안정 상태: 현재 감지된 공급망 리스크가 없습니다.")
+    elif scenario == "S1":
+        st.error("🚨 [시나리오 1] 창고 포화 및 자본 동결 위험 감지! 미국 오하이오 프로젝트 지연 리스크가 반영되었습니다.")
+    elif scenario == "S2":
+        st.error("🚨 [시나리오 2] 공급망 차질로 인한 납기 지연 및 지체상금 폭탄 위험 감지!")
+    else:
+        st.error("🚨 리스크 시뮬레이션이 실행되었습니다.")
 
 
 def render_kpi_cards(frozen_capital: int, delay_penalty: int) -> None:
     col_left, col_right = st.columns(2)
-    if _is_simulation_run():
+    if frozen_capital > 0:
         col_left.metric("동결 자금 총액", _format_krw(frozen_capital), delta=f"+{_format_krw(frozen_capital)}")
-        col_right.metric("납기지연손실금액", _format_krw(delay_penalty), delta=f"+{_format_krw(delay_penalty)}")
     else:
         col_left.metric("동결 자금 총액", _format_krw(frozen_capital))
+
+    if delay_penalty > 0:
+        col_right.metric("납기지연손실금액", _format_krw(delay_penalty), delta=f"+{_format_krw(delay_penalty)}")
+    else:
         col_right.metric("납기지연손실금액", _format_krw(delay_penalty))
 
 
@@ -52,12 +59,14 @@ def render_risk_summary() -> None:
         st.markdown("시나리오 요약: 아직 시뮬레이션이 실행되지 않았습니다. 버튼을 눌러 위험 시나리오를 반영하세요.")
 
 
-def render_action_plan(frozen_capital: int, delay_penalty: int) -> None:
-    if delay_penalty >= THRESHOLD_PENALTY or frozen_capital > THRESHOLD_FROZEN:
+def render_action_plan(frozen_capital: int, delay_penalty: int, scenario: str) -> None:
+    if scenario == "S1" or frozen_capital > THRESHOLD_FROZEN:
         st.markdown(
-            """👉 [Action Plan]
-**현금 흐름 악화** 우려. 즉시 대기업(LGES 등) 공급망 담당자와 협의하여
-**자재 사급** 전환을 요청하거나, 야드 포화를 막기 위한 임시 **외주 창고** 확보를 검토하십시오."""
+            "👉 **[Action Plan]** **현금 흐름 악화** 및 야드 포화 우려. 즉시 물류팀과 협의하여 인근에 강판 구조물 적재를 위한 임시 **외주 창고** 확보를 검토하십시오."
+        )
+    elif scenario == "S2" or delay_penalty >= THRESHOLD_PENALTY:
+        st.markdown(
+            "👉 **[Action Plan]** 대기업 납기 독촉으로 인한 **배상금 폭탄** 우려. 즉시 대기업(LGES 등) 공급망 담당자와 협의하여 핵심 전장부품의 **자재 사급** 전환을 요청하십시오."
         )
 
 
@@ -75,18 +84,18 @@ def render_debug_checklist() -> None:
 
 def render_executive_dashboard(df: pd.DataFrame | None, frozen_capital: int, delay_penalty: int) -> None:
     if df is not None:
-        render_status_banner()
+        render_status_banner(_is_simulation_run(), "NONE")
         render_risk_summary()
         render_kpi_cards(frozen_capital=frozen_capital, delay_penalty=delay_penalty)
-        render_action_plan(frozen_capital=frozen_capital, delay_penalty=delay_penalty)
+        render_action_plan(frozen_capital=frozen_capital, delay_penalty=delay_penalty, scenario="NONE")
         with st.expander("상세 데이터 보기"):
             st.dataframe(df, use_container_width=True)
         render_debug_checklist()
     else:
-        render_status_banner()
+        render_status_banner(_is_simulation_run(), "NONE")
         render_risk_summary()
         render_kpi_cards(frozen_capital=0, delay_penalty=0)
-        render_action_plan(frozen_capital=0, delay_penalty=0)
+        render_action_plan(frozen_capital=0, delay_penalty=0, scenario="NONE")
         render_debug_checklist()
 
 
@@ -106,7 +115,7 @@ def render_table(dataframe: pd.DataFrame) -> None:
 
 def render_red_alerts(dataframe: pd.DataFrame) -> None:
     _ = dataframe
-    render_status_banner()
+    render_status_banner(_is_simulation_run(), "NONE")
 
 
 def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame) -> tuple[str, int, int, str]:
