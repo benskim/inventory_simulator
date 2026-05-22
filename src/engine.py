@@ -90,11 +90,6 @@ def calculate_total_risk_cost(selected: pd.DataFrame, delay_months: int, plt_mon
 
 
 def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame) -> tuple[str, int, int, str]:
-    st.markdown("#### Dead Stock(재고 원가) 및 총 리스크 비용 시뮬레이션")
-    st.caption("Dead Stock은 지연 개월수와 무관하게 Σ(Unit_Cost × Required_Qty)로 계산됩니다.")
-    st.caption("카테고리 기준값: 원자재(연8%/200ea), 전장부품(연15%/500ea), 기능성모듈(연12%/2ea), 기타(연5%/100ea).")
-    st.caption("Category는 Item_Name 기반 자동 예측되며, 아래 드롭다운에서 사용자가 수정할 수 있습니다. 빈 값은 기타 처리됩니다.")
-
     project_ids = project_master_df["Project_ID"].astype("string").str.strip().dropna().drop_duplicates().sort_values().tolist()
     if len(project_ids) == 0:
         st.error("Project_Master에 유효한 Project_ID가 없습니다.")
@@ -130,10 +125,15 @@ def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_d
     with m1:
         st.metric("Dead Stock (재고 원가)", f"₩{base_dead_stock:,.0f}")
         st.caption("Dead Stock = Σ(Unit_Cost × Required_Qty) (지연 개월수와 무관)")
+        st.caption("**카테고리별 [연간 진부화비율/qty to plt] 안내 :**")
+        st.caption("원자재(연8%/200), 전장부품(연15%/500), 기능성모듈(연12%/2), 기타(연5%/100).")
+        st.caption("Category는 Item_Name 기반 자동 예측되며, 아래 드롭다운에서 사용자가 수정할 수 있습니다. 빈 값은 기타 처리됩니다.")
+
     with m2:
         st.metric("총 리스크 비용", f"₩{total_risk_cost:,.0f}")
-        st.caption(f"보관비용 = M_rent × Q × m  (현재: ₩{yard_cost:,.0f})")
-        st.caption(f"자본기회비용 = C × ((A_wacc/100) ÷ 12) × m  (현재: ₩{capital_cost:,.0f})")
-        st.caption(f"진부화손실비용 = C × ((A_obs/100) ÷ 12) × m  (현재: ₩{obsolescence_cost:,.0f})")
-        st.caption("총손실 = 보관비용 + 자본기회비용 + 진부화손실비용")
+        st.caption("**총 손실 = 보관비용 + 자본기회비용 + 진부화손실비용**")
+        st.caption(f"* 보관비용 = PLT당 월 보관료 × Q(PLT환산) × 지연 개월수  (현재: ₩{yard_cost:,.0f})")
+        st.caption(f"* 자본기회비용 = 재고원가 × ((연간 금융비용율/100) ÷ 12) × 지연 개월수  (현재: ₩{capital_cost:,.0f})") #월별 가중평균자본비용
+        st.caption(f"* 진부화손실비용 = 재고원가 × ((연간 진부화비율/100) ÷ 12) × 지연 개월수  (현재: ₩{obsolescence_cost:,.0f})")
+        
     return selected_project_id, delay_months, total_risk_cost, f"₩{total_risk_cost:,.0f}"
