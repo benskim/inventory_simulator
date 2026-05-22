@@ -4,9 +4,9 @@ import pandas as pd
 import streamlit as st
 
 from data.preset import DEMO_BOM, DEMO_DELAY_DAYS, DEMO_PROJECT
-from src import ui
 from src import data_loader
 from src import engine
+from src import ui
 
 
 for key, default in [
@@ -39,42 +39,56 @@ def main() -> None:
             st.stop()
 
     st.markdown("### 입력 데이터 업로드 및 스키마 검증")
-    schedule_file, inventory_file = data_loader.render_upload_and_validation_interface()
+    project_df, bom_df = data_loader.render_upload_and_validation_interface()
 
-    if schedule_file is not None or inventory_file is not None:
+    if project_df is not None or bom_df is not None:
         st.session_state.demo_mode = False
         st.session_state.demo_data = None
 
-    slider_value = st.slider("납기 지연 일수", min_value=0, max_value=365, value=DEMO_DELAY_DAYS)
+    slider_days = st.slider("납기 지연 일수", min_value=0, max_value=365, value=DEMO_DELAY_DAYS)
+
+    frozen_capital = 0
+    penalty_amount = 0
 
     if st.session_state.demo_mode and st.session_state.demo_data:
         df_schedule = st.session_state.demo_data["schedule"]
-        df_inventory = st.session_state.demo_data["inventory"]
-        delay_days = DEMO_DELAY_DAYS
-    elif schedule_file is not None and inventory_file is not None:
-        df_schedule = schedule_file
-        df_inventory = inventory_file
-        delay_days = slider_value
-    else:
-        df_schedule = None
-        df_inventory = None
-
-    if df_schedule is not None and df_inventory is not None:
-        frozen_capital, *_ = engine.calculate_total_risk_cost(
-            selected=df_inventory,
-            delay_months=0,
-            plt_monthly_cost=engine.DEFAULT_PLT_MONTHLY_COST,
-            holding_cost_rate=engine.DEFAULT_HOLDING_COST_RATE,
-        )
+        _ = st.session_state.demo_data["inventory"]
         penalty_result = engine.calculate_delay_penalty(
             order_value=int(df_schedule["Order_Value"].iloc[0]),
-            delay_days=delay_days,
+            delay_days=DEMO_DELAY_DAYS,
         )
+        penalty_amount = penalty_result["penalty_amount"]
+        st.session_state.simulation_run = True
 
         ui.render_status_banner()
-        ui.render_kpi_cards(frozen_capital, penalty_result["penalty_amount"])
-        ui.render_risk_summary()
-        ui.render_action_plan(frozen_capital, penalty_result["penalty_amount"])
+        ui.render_kpi_cards(frozen_capital, penalty_amount)
+        ui.render_action_plan(frozen_capital, penalty_amount)
+        st.caption(f"납기지연손실금액 산식: {penalty_result['formula_text']}")
+
+    elif project_df is not None and bom_df is not None:
+        st.markdown("### Dead Stock 시뮬레이션")
+        _, delay_months, total_risk_cost, _ = ui.render_dead_stock_simulator(project_df, bom_df)
+
+        # 총 손실 공식은 기존 월 단위를 그대로 유지 (일 슬라이더와 분리)
+        _ = delay_months
+        frozen_capital = total_risk_cost
+
+        df_schedule = project_df
+        first_order_value = int(df_schedule["Order_Value"].iloc[0]) if len(df_schedule) > 0 else 0
+        penalty_result = engine.calculate_delay_penalty(
+            order_value=first_order_value,
+            delay_days=slider_days,
+        )
+
+        penalty_amount = 0
+        st.session_state.simulation_run = True
+
+        ui.render_status_banner()
+        ui.render_kpi_cards(frozen_capital, penalty_amount)
+        ui.render_action_plan(frozen_capital, penalty_amount)
+        st.caption("동결자금 산식(월기준): 보관비용 + 자본기회비용 + 진부화손실비용")
+        st.caption(f"(참고) 납기지연손실금액 일단위 산식: {penalty_result['formula_text']}")
+
     else:
         st.info("📂 엑셀 파일을 업로드하거나 데모 버튼을 클릭하세요.")
         ui.render_kpi_cards(0, 0)

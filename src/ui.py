@@ -38,15 +38,14 @@ def render_kpi_cards(frozen_capital: int, delay_penalty: int) -> None:
     col_left, col_right = st.columns(2)
     if _is_simulation_run():
         col_left.metric("동결 자금 총액", _format_krw(frozen_capital), delta=f"+{_format_krw(frozen_capital)}")
-        col_right.metric("누적 지체상금(벌금)", _format_krw(delay_penalty), delta=f"+{_format_krw(delay_penalty)}")
+        col_right.metric("납기지연손실금액", _format_krw(delay_penalty), delta=f"+{_format_krw(delay_penalty)}")
     else:
         col_left.metric("동결 자금 총액", _format_krw(frozen_capital))
-        col_right.metric("누적 지체상금(벌금)", _format_krw(delay_penalty))
+        col_right.metric("납기지연손실금액", _format_krw(delay_penalty))
 
 
 def render_risk_summary() -> None:
     _ensure_session_state()
-    st.button("리스크 시뮬레이션 실행", on_click=lambda: st.session_state.update({"simulation_run": True}), use_container_width=True)
     if _is_simulation_run():
         st.markdown("시나리오 요약: 프로젝트 지연에 따라 동결 자금 및 누적 지체상금이 반영되었습니다.")
     else:
