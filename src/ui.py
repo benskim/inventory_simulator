@@ -11,8 +11,14 @@ THRESHOLD_PENALTY = 10_000_000
 THRESHOLD_FROZEN = 200_000_000
 
 
-if "simulation_run" not in st.session_state:
-    st.session_state.simulation_run = False
+def _ensure_session_state() -> None:
+    if "simulation_run" not in st.session_state:
+        st.session_state.simulation_run = False
+
+
+def _is_simulation_run() -> bool:
+    _ensure_session_state()
+    return bool(st.session_state.get("simulation_run", False))
 
 
 def _format_krw(amount: int) -> str:
@@ -20,7 +26,7 @@ def _format_krw(amount: int) -> str:
 
 
 def render_status_banner() -> None:
-    if st.session_state.simulation_run:
+    if _is_simulation_run():
         st.error("🚨 창고 포화 및 자본 동결 위험 감지! 프로젝트 지연 리스크가 반영되었습니다.")
     else:
         st.success("🟢 시스템 안정 상태: 현재 감지된 공급망 리스크가 없습니다.")
@@ -28,7 +34,7 @@ def render_status_banner() -> None:
 
 def render_kpi_cards(frozen_capital: int, delay_penalty: int) -> None:
     col_left, col_right = st.columns(2)
-    if st.session_state.simulation_run:
+    if _is_simulation_run():
         col_left.metric("동결 자금 총액", _format_krw(frozen_capital), delta=f"+{_format_krw(frozen_capital)}")
         col_right.metric("누적 지체상금(벌금)", _format_krw(delay_penalty), delta=f"+{_format_krw(delay_penalty)}")
     else:
@@ -37,8 +43,9 @@ def render_kpi_cards(frozen_capital: int, delay_penalty: int) -> None:
 
 
 def render_risk_summary() -> None:
+    _ensure_session_state()
     st.button("리스크 시뮬레이션 실행", on_click=lambda: st.session_state.update({"simulation_run": True}), use_container_width=True)
-    if st.session_state.simulation_run:
+    if _is_simulation_run():
         st.markdown("시나리오 요약: 프로젝트 지연에 따라 동결 자금 및 누적 지체상금이 반영되었습니다.")
     else:
         st.markdown("시나리오 요약: 아직 시뮬레이션이 실행되지 않았습니다. 버튼을 눌러 위험 시나리오를 반영하세요.")
