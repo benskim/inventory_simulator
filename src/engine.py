@@ -4,7 +4,6 @@ import math
 import re
 
 import pandas as pd
-import streamlit as st
 
 
 DEFAULT_PLT_MONTHLY_COST = 30000
@@ -89,51 +88,55 @@ def calculate_total_risk_cost(selected: pd.DataFrame, delay_months: int, plt_mon
     return int(baseline), int(round(yard_cost, 0)), int(round(capital_cost, 0)), int(round(obsolescence_cost, 0)), int(total)
 
 
-def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_df: pd.DataFrame) -> tuple[str, int, int, str]:
-    project_ids = project_master_df["Project_ID"].astype("string").str.strip().dropna().drop_duplicates().sort_values().tolist()
-    if len(project_ids) == 0:
-        st.error("Project_Master에 유효한 Project_ID가 없습니다.")
-        st.stop()
 
-    selected_project_id = st.selectbox("Project 선택", project_ids)
+DAILY_PENALTY_RATE: float = 0.001  # 일일 지체상금 요율 0.1%
 
-    c1, c2, c3 = st.columns(3)
-    delay_months = c1.slider("지연 기간(개월)", min_value=0, max_value=12, value=0)
-    holding_cost_rate = c2.number_input("연간 금융비용율(%)", min_value=0.0, max_value=100.0, value=DEFAULT_HOLDING_COST_RATE, step=0.1)
-    plt_monthly_cost = c3.number_input("PLT당 월 보관료(원)", min_value=0, value=DEFAULT_PLT_MONTHLY_COST, step=1000)
 
-    selected_bom = _merge_project_bom(project_master_df, inventory_bom_df, selected_project_id)
-    selected_bom["Category"] = _resolve_category_series(selected_bom)
+def _sanitize_to_non_negative_int(value: object) -> int:
+    if value is None:
+        value = 0
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
+            value = 0
+        else:
+            try:
+                numeric = float(stripped.replace(",", ""))
+                if math.isnan(numeric):
+                    value = 0
+                else:
+                    value = numeric
+            except (TypeError, ValueError):
+                value = 0
+    else:
+        try:
+            if math.isnan(value):
+                value = 0
+        except (TypeError, ValueError):
+            pass
 
-    editable = st.data_editor(
-        selected_bom[["Item_Code", "Item_Name", "Unit_Cost", "Required_Qty", "Category"]],
-        hide_index=True,
-        use_container_width=True,
-        column_config={"Category": st.column_config.SelectboxColumn("Category", options=list(CATEGORY_MASTER_DEFAULTS.keys()))},
-        key=f"category_editor_{selected_project_id}",
-    )
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = 0
 
-    selected_bom.loc[editable.index, "Category"] = editable["Category"].astype("string")
-    base_dead_stock, yard_cost, capital_cost, obsolescence_cost, total_risk_cost = calculate_total_risk_cost(
-        selected_bom,
-        delay_months,
-        int(plt_monthly_cost),
-        float(holding_cost_rate),
-    )
+    return max(0, value)
 
-    m1, m2 = st.columns(2)
-    with m1:
-        st.metric("Dead Stock (재고 원가)", f"₩{base_dead_stock:,.0f}")
-        st.caption("Dead Stock = Σ(Unit_Cost × Required_Qty) (지연 개월수와 무관)")
-        st.caption("**카테고리별 [연간 진부화비율/qty to plt] 안내 :**")
-        st.caption("원자재(연8%/200), 전장부품(연15%/500), 기능성모듈(연12%/2), 기타(연5%/100).")
-        st.caption("Category는 Item_Name 기반 자동 예측되며, 아래 드롭다운에서 사용자가 수정할 수 있습니다. 빈 값은 기타 처리됩니다.")
 
-    with m2:
-        st.metric("총 리스크 비용", f"₩{total_risk_cost:,.0f}")
-        st.caption("**총 손실 = 보관비용 + 자본기회비용 + 진부화손실비용**")
-        st.caption(f"* 보관비용 = PLT당 월 보관료 × Q(PLT환산) × 지연 개월수  (현재: ₩{yard_cost:,.0f})")
-        st.caption(f"* 자본기회비용 = 재고원가 × ((연간 금융비용율/100) ÷ 12) × 지연 개월수  (현재: ₩{capital_cost:,.0f})") #월별 가중평균자본비용
-        st.caption(f"* 진부화손실비용 = 재고원가 × ((연간 진부화비율/100) ÷ 12) × 지연 개월수  (현재: ₩{obsolescence_cost:,.0f})")
-        
-    return selected_project_id, delay_months, total_risk_cost, f"₩{total_risk_cost:,.0f}"
+def calculate_delay_penalty(order_value: int, delay_days: int) -> dict:
+    safe_order_value = _sanitize_to_non_negative_int(order_value)
+    safe_delay_days = _sanitize_to_non_negative_int(delay_days)
+
+    penalty_amount = int(safe_order_value * safe_delay_days * DAILY_PENALTY_RATE)
+    formula_text = f"₩{safe_order_value:,.0f} × {safe_delay_days}일 × {DAILY_PENALTY_RATE * 100:.1f}% = ₩{penalty_amount:,.0f}"
+
+    return {
+        "penalty_amount": penalty_amount,
+        "formula_breakdown": {
+            "order_value": safe_order_value,
+            "delay_days": safe_delay_days,
+            "daily_rate": DAILY_PENALTY_RATE,
+        },
+        "formula_text": formula_text,
+    }
+

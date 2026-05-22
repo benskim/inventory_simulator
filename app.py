@@ -33,8 +33,8 @@ from src.data_loader import (
     sanitize_dataframe,
     validate_columns,
 )
-from src.engine import calculate_risk_metrics, render_dead_stock_simulator, summarize_kpi
-from src.ui import render_executive_dashboard
+from src.engine import calculate_risk_metrics, summarize_kpi
+from src.ui import render_dead_stock_simulator, render_executive_dashboard
 
 
 def main() -> None:
