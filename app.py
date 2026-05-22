@@ -37,6 +37,14 @@ def main() -> None:
     st.set_page_config(page_title="Inventory Risk Simulator", layout="wide")
     st.title("초경량 결정론적 재고 리스크 시뮬레이터")
 
+    
+    st.markdown("### 입력 데이터 업로드 및 스키마 검증")
+    schedule_file, inventory_file = data_loader.render_upload_and_validation_interface()
+
+    if schedule_file is not None or inventory_file is not None:
+        st.session_state.demo_mode = False
+        st.session_state.demo_scenario = "NONE"
+
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         if st.button("⚡ [S1] LGES 오하이오 3개월 지연 데모", use_container_width=True):
@@ -48,13 +56,6 @@ def main() -> None:
             st.session_state.demo_mode = True
             st.session_state.demo_scenario = "S2"
             st.session_state.simulation_run = True
-
-    st.markdown("### 입력 데이터 업로드 및 스키마 검증")
-    schedule_file, inventory_file = data_loader.render_upload_and_validation_interface()
-
-    if schedule_file is not None or inventory_file is not None:
-        st.session_state.demo_mode = False
-        st.session_state.demo_scenario = "NONE"
 
     slider_value = st.slider("납기 지연 일수", min_value=0, max_value=365, value=21)
     scenario = st.session_state.demo_scenario
@@ -95,7 +96,7 @@ def main() -> None:
         ui.render_action_plan(frozen_capital, penalty_result["penalty_amount"], scenario)
         st.caption(f"납기지연손실 산식: {penalty_result['formula_text']}")
     else:
-        st.info("📂 파일을 업로드하거나 데모 버튼을 클릭하세요.")
+        # st.info("📂 파일을 업로드하거나 데모 버튼을 클릭하세요.")
         ui.render_status_banner(st.session_state.simulation_run, scenario)
         ui.render_kpi_cards(0, 0)
 
