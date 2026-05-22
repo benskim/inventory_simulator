@@ -141,37 +141,38 @@ def render_dead_stock_simulator(project_master_df: pd.DataFrame, inventory_bom_d
 DAILY_PENALTY_RATE: float = 0.001  # 일일 지체상금 요율 0.1%
 
 
-def calculate_delay_penalty(order_value: int, delay_days: int) -> dict:
-    def _sanitize_to_non_negative_int(value: object) -> int:
-        if value is None:
+def _sanitize_to_non_negative_int(value: object) -> int:
+    if value is None:
+        value = 0
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if stripped == "":
             value = 0
-        elif isinstance(value, str):
-            stripped = value.strip()
-            if stripped == "":
-                value = 0
-            else:
-                try:
-                    numeric = float(stripped.replace(",", ""))
-                    if math.isnan(numeric):
-                        value = 0
-                    else:
-                        value = numeric
-                except (TypeError, ValueError):
-                    value = 0
         else:
             try:
-                if math.isnan(value):
+                numeric = float(stripped.replace(",", ""))
+                if math.isnan(numeric):
                     value = 0
+                else:
+                    value = numeric
             except (TypeError, ValueError):
-                pass
-
+                value = 0
+    else:
         try:
-            value = int(value)
+            if math.isnan(value):
+                value = 0
         except (TypeError, ValueError):
-            value = 0
+            pass
 
-        return max(0, value)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = 0
 
+    return max(0, value)
+
+
+def calculate_delay_penalty(order_value: int, delay_days: int) -> dict:
     safe_order_value = _sanitize_to_non_negative_int(order_value)
     safe_delay_days = _sanitize_to_non_negative_int(delay_days)
 
